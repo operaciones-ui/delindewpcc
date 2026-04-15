@@ -132,6 +132,28 @@
         signaturePad.clear();
     }
 
+    // Importar Firebase (Versión 9+ Modular)
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { getStorage, ref, uploadString } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
+
+// Tu configuración de Firebase (LA QUE COPIASTE EN EL PASO ANTERIOR)
+const firebaseConfig = {
+  apiKey: "AIzaSyCvB-licXMCGf0aotJOJis-UDETCWi0kTU",
+  authDomain: "padel-safe-pro.firebaseapp.com",
+  databaseURL: "https://padel-safe-pro-default-rtdb.firebaseio.com",
+  projectId: "padel-safe-pro",
+  storageBucket: "padel-safe-pro.firebasestorage.app",
+  messagingSenderId: "824419244376",
+  appId: "1:824419244376:web:6b36a78150e62ef1622d2d",
+  measurementId: "G-QRCGNBEW0J"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const storage = getStorage(app);
+
+
     function saveData() {
         if (signaturePad.isEmpty()) {
             alert("Por favor, firme el documento antes de enviar.");
