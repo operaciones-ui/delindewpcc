@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ECA Agroindustria - Packing List Master v24.0</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, getDocs, query, orderBy, deleteDoc, doc, where, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCqI1jDuW6pFdPx56r5Bznz5Dgau6_1v2A",
+            authDomain: "packinglist-f2171.firebaseapp.com",
+            projectId: "packinglist-f2171",
+            storageBucket: "packinglist-f2171.firebasestorage.app",
+            messagingSenderId: "873790946774",
+            appId: "1:873790946774:web:0a20970ec1f632eadaf877"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        window.fb = { db, col: collection, add: addDoc, get: getDocs, qry: query, ord: orderBy, del: deleteDoc, docRef: doc, wh: where, set: setDoc };
+        setTimeout(() => { 
+            cargarListasDesplegables();
+            renderizarHistorial(); 
+        }, 1000);
+    </script>
+</head>
+<body class="bg-slate-100 p-4 md:p-8 text-slate-800 font-sans">
+
+    <div class="max-w-6xl mx-auto space-y-6">
+        <div class="flex gap-2">
+            <button onclick="verPestana('generador')" id="btnNavGen" class="px-6 py-3 rounded-t-xl font-bold bg-white border-t-4 border-blue-900 shadow-sm">📝 Generador</button>
+            <button onclick="verPestana('historial')" id="btnNavHist" class="px-6 py-3 rounded-t-xl font-bold bg-slate-200 hover:bg-white transition shadow-sm">📋 Historial Cloud</button>
+        </div>
+
+        <div id="pestana-generador" class="bg-white p-6 md:p-8 rounded-xl rounded-tl-none shadow-2xl border-t-8 border-blue-900">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center border-b pb-6 mb-8 gap-4">
+                <div>
+                    <h1 class="text-3xl font-black text-blue-900 tracking-tight">ECA AGROINDUSTRIA</h1>
+                    <p class="text-slate-500 font-medium italic">Gestión de Cargas de Exportación</p>
+                </div>
+                <div class="text-right">
+                    <span class="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">Módulo Maestro v24.0 Cloud</span>
+                </div>
+            </div>
+
+            <form id="plForm" class="space-y-8">
+                <div class="bg-blue-900 p-6 rounded-xl shadow-lg text-white">
+                    <label class="block text-sm font-bold uppercase mb-2 tracking-widest text-blue-200">1. Seleccione la Vía de Transporte</label>
+                    <select id="via" class="w-full border-2 border-blue-400 bg-blue-800 p-4 rounded-lg text-xl font-bold outline-none focus:border-white transition-all" onchange="toggleTransporte()">
+                        <option value="MARITIMO">🚢 MARÍTIMO</option>
+                        <option value="AEREO">✈️ AÉREO</option>
+                        <option value="TERRESTRE">🚛 TERRESTRE</option>
+                    </select>
+                </div>
+
+                <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
+                    <h2 class="text-lg font-bold text-blue-900 border-b pb-2 uppercase">2. Información del Embarque</h2>
+                    <div class="flex flex-col md:flex-row gap-6">
+                        <div class="w-full md:w-1/5">
+                            <label class="block text-sm font-bold text-slate-700">Referencia ECA</label>
+                            <input type="text" id="refEca" class="w-full border-2 border-slate-200 rounded-lg p-2.5 outline-none focus:border-blue-500" placeholder="ECA-0XX">
+                        </div>
+                        <div class="flex-1">
+                            <label class="block text-sm font-bold text-slate-700">Cliente</label>
+                            <select id="cliente" class="w-full border-2 border-slate-200 rounded-lg p-2.5 outline-none focus:border-blue-500"></select>
+                        </div>
+                        <div class="w-full md:w-1/4">
+                            <label class="block text-sm font-bold text-slate-700">País Destino</label>
+                            <select id="paisDestino" class="w-full border-2 border-slate-200 rounded-lg p-2.5 outline-none focus:border-blue-500"></select>
+                        </div>
+                    </div>
+
+                    <div id="logisticaFechas" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-4 border-t border-slate-100">
+                        <div><label id="labelPol" class="text-[10px] font-bold text-slate-400 uppercase ml-1">Puerto de Carga</label><select id="pol" class="w-full border p-2.5 rounded-lg"></select></div>
+                        <div><label id="labelPod" class="text-[10px] font-bold text-slate-400 uppercase ml-1">Puerto de Descarga</label><select id="pod" class="w-full border p-2.5 rounded-lg"></select></div>
+                        <div><label class="text-[10px] font-bold text-slate-400 uppercase ml-1">ETD (Salida)</label><input type="date" id="etd" class="w-full border p-2.5 rounded-lg"></div>
+                        <div><label class="text-[10px] font-bold text-slate-400 uppercase ml-1">ETA (Llegada)</label><input type="date" id="eta" class="w-full border p-2.5 rounded-lg"></div>
+                    </div>
+                </div>
+
+                <div id="transporteContainer" class="bg-slate-50 p-6 rounded-xl border border-slate-200 shadow-inner">
+                    <div id="camposMaritimo" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div><label class="text-xs font-bold text-slate-500 uppercase">N° Contenedor</label><input type="text" id="contenedor" class="w-full border p-2.5 rounded-lg"></div>
+                        <div><label class="text-xs font-bold text-slate-500 uppercase">Buque / Viaje</label><input type="text" id="buque" class="w-full border p-2.5 rounded-lg"></div>
+                        <div><label class="text-xs font-bold text-blue-800 uppercase italic">N° de Booking</label><input type="text" id="booking" class="w-full border-2 border-blue-200 p-2.5 rounded-lg font-bold"></div>
+                    </div>
+                    <div id="camposAereo" class="hidden grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div><label class="text-xs font-bold text-slate-500 uppercase">Compañía Aérea</label><input type="text" id="aerolinea" class="w-full border p-2.5 rounded-lg"></div>
+                        <div><label class="text-xs font-bold text-slate-500 uppercase">N° de Vuelo</label><input type="text" id="vuelo" class="w-full border p-2.5 rounded-lg"></div>
+                        <div><label class="text-xs font-bold text-blue-800 uppercase">Guía Aérea (AWB)</label><input type="text" id="awb" class="w-full border-2 border-blue-200 p-2.5 rounded-lg font-bold"></div>
+                    </div>
+                    <div id="camposTerrestre" class="hidden grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div><label class="text-xs font-bold text-slate-500 uppercase">Chofer</label><input type="text" id="chofer" class="w-full border p-2.5 rounded-lg"></div>
+                        <div><label class="text-xs font-bold text-slate-500 uppercase">Patente Camión</label><input type="text" id="patenteCamion" class="w-full border p-2.5 rounded-lg"></div>
+                        <div><label class="text-xs font-bold text-slate-500 uppercase">Patente Semi</label><input type="text" id="patenteSemi" class="w-full border p-2.5 rounded-lg"></div>
+                        <div><label class="text-xs font-bold text-slate-500 uppercase">Empresa Transporte</label><input type="text" id="empresa" class="w-full border p-2.5 rounded-lg"></div>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
+                        <h2 class="text-xl font-bold text-slate-800 border-l-4 border-blue-900 pl-3 uppercase">Detalle Carga Comercial</h2>
+                        <div class="flex items-center bg-blue-50 px-4 py-2 rounded-full border border-blue-200">
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="mostrarTambores" class="sr-only peer" onchange="toggleTambores()">
+                                <div class="w-11 h-6 bg-slate-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                <span class="ml-3 text-sm font-bold text-blue-900 uppercase">¿Mostrar Tambores?</span>
+                            </label>
+                        </div>
+                        <button type="button" onclick="agregarFila('bodyLotes')" class="bg-slate-800 text-white px-6 py-2 rounded-lg font-bold hover:bg-black transition">+ Añadir Ítem</button>
+                    </div>
+                    <div class="overflow-x-auto rounded-xl border border-slate-300 shadow-sm bg-white">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-800 text-white text-[10px] uppercase text-center">
+                                    <th class="p-4 text-left w-2/5">Descripción</th>
+                                    <th class="p-4">Lote</th>
+                                    <th class="p-4 bg-blue-800 col-tambores hidden">Tambores</th>
+                                    <th class="p-4">Cant.</th>
+                                    <th class="p-4">Neto U.</th>
+                                    <th class="p-4">Bruto U.</th>
+                                    <th class="p-4"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="bodyLotes"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="bg-slate-50 p-6 rounded-xl border border-slate-200">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="text-xs font-bold text-slate-500 uppercase italic">Muestras sin valor comercial</h3>
+                        <button type="button" onclick="agregarFila('bodyMuestras')" class="bg-slate-400 text-white px-3 py-1 rounded text-xs font-bold">+ Muestra</button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-center border-collapse">
+                            <thead>
+                                <tr class="text-[9px] uppercase text-slate-400 font-bold border-b">
+                                    <th class="pb-2">Lote</th><th class="pb-2">Cant.</th><th class="pb-2">Neto U.</th><th class="pb-2">Bruto U.</th><th class="pb-2 w-10"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="bodyMuestras"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-blue-50 p-4 rounded-xl border border-blue-200 flex items-center justify-between">
+                        <div>
+                            <label class="block text-xs font-bold text-blue-900 uppercase">Palletización</label>
+                            <select id="conPallets" class="border rounded p-1 bg-white text-sm" onchange="togglePallets()">
+                                <option value="NO">No</option><option value="SI">Sí</option>
+                            </select>
+                        </div>
+                        <div id="camposPallets" class="hidden flex gap-2">
+                            <input type="number" id="cantPallets" class="w-16 border rounded p-1 text-center" placeholder="Cant">
+                            <input type="number" id="pesoPallet" class="w-16 border rounded p-1 text-center" placeholder="KG">
+                        </div>
+                    </div>
+                    <div class="bg-orange-50 p-4 rounded-xl border border-orange-200 flex items-center justify-between">
+                        <label class="block text-xs font-bold text-orange-900 uppercase">Termógrafos</label>
+                        <div class="flex gap-2">
+                            <select id="conTermo" class="border rounded p-1 bg-white text-sm" onchange="toggleTermo()">
+                                <option value="NO">No</option><option value="SI">Sí</option>
+                            </select>
+                            <div id="camposTermo" class="hidden flex gap-1">
+                                <input type="text" id="termo1" class="w-20 border rounded p-1 text-xs" placeholder="S1">
+                                <input type="text" id="termo2" class="w-20 border rounded p-1 text-xs" placeholder="S2">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-50 p-6 rounded-xl border border-slate-200">
+                    <label class="block text-sm font-bold text-slate-700 uppercase mb-2">Observaciones Generales</label>
+                    <textarea id="observaciones" rows="3" class="w-full border border-slate-300 rounded-lg p-3 outline-none focus:border-blue-500" placeholder="Escriba aquí notas que aparecerán al final del documento..."></textarea>
+                </div>
+
+                <div class="bg-slate-800 p-6 rounded-2xl shadow-xl space-y-4">
+                    <div class="flex items-center gap-4">
+                        <label class="text-white font-bold uppercase text-sm tracking-widest">Idioma del Documento:</label>
+                        <select id="idiomaDoc" class="flex-1 bg-slate-700 text-white border-2 border-slate-600 rounded-lg p-2 font-bold outline-none focus:border-blue-400">
+                            <option value="ES">🇪🇸 ESPAÑOL</option>
+                            <option value="EN">🇺🇸 ENGLISH</option>
+                        </select>
+                    </div>
+                    <div class="flex flex-col md:flex-row gap-4">
+                        <button type="button" onclick="limpiarFormulario()" class="bg-slate-600 text-white px-8 py-5 rounded-2xl font-bold text-xl hover:bg-red-600 transition-all uppercase">Limpiar Todo</button>
+                        <button type="button" onclick="validarYGuardarCloud()" class="flex-1 bg-blue-600 text-white px-12 py-5 rounded-2xl font-black text-2xl shadow-2xl hover:bg-blue-500 transition-all active:scale-95 uppercase">Generar y Guardar Cloud</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <div id="pestana-historial" class="hidden bg-white p-8 rounded-xl shadow-2xl border-t-8 border-blue-900">
+            <h2 class="text-2xl font-black text-slate-800 uppercase tracking-tighter italic mb-8">Historial Cloud</h2>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left">
+                    <thead>
+                        <tr class="border-b-2 border-slate-100 text-slate-400 text-[10px] uppercase tracking-widest">
+                            <th class="py-4">Fecha/Hora</th><th>Ref</th><th>Cliente</th><th class="text-center">Modificar / Descargar</th><th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="tablaHistorial"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const LOGO_URL = "https://ecaagroindustria.com/wp-content/uploads/2023/07/logo-eca-agroindustria.png";
+
+        const DATA_LISTAS = {
+            clientes: ["CITRUS ARGENTINA CORP.", "C.I. AGRICOLAS UNIDAS SAS", "ECA EUROPA", "FLAGFOOD", "FLAVOR INFUSION INTL", "FOOD PARTNERS", "HIPP GmbH & CO. PRODUKTION KG", "KATAOKA & CO", "LINEAGE FREIGHT FORWARDER EUROPE BV", "MCI MIRITZ CITRUS GMBH & CO.", "PRODARESS", "COMERCIALIZADORA TRADECOS CHILE SPA", "VADIMAC"],
+            productos: ["ACEITE ESCENCIAL DE LIMON", "ACEITE ESCENCIAL DE MANDARINA", "ACEITE ESCENCIAL DE NARANJA", "ACEITE ESCENCIAL DE POMELO", "ACEITE ESCENCIAL DE MANDARINA ORGANICA", "ACEITE ESCENCIAL DE POMELO ORGANICO", "ACEITE ESCENCIAL DE NARANJA ORGANICA", "ACEITE ESCENCIAL DE LIMON ORGANICO", "JUGO CONCENTRADO DE LIMON", "JUGO CONCENTRADO DE MANDARINA", "JUGO CONCENTRADO DE NARANJA", "JUGO CONCENTRADO DE NARANJA CLOUDY", "JUGO CONCENTRADO DE POMELO", "JUGO CONCENTRADO DE MANDARINA ORGANICA", "JUGO CONCENTRADO DE NARANJA ORGANICA", "JUGO CONCENTRADO DE LIMON ORGANICO", "JUGO CONCENTRADO DE POMELO ORGANICO"],
+            paises: ["ESTADOS UNIDOS", "ESPAÑA", "MÉXICO", "BRASIL", "CHILE", "ALEMANIA", "PAISES BAJOS", "JAPON", "COLOMBIA", "FRANCIA", "PANAMA"],
+            puertosCarga: ["BUENOS AIRES", "ROSARIO", "MONTEVIDEO"],
+            puertosDescarga: ["MIAMI", "VALENCIA", "SANTOS", "HAMBURGO", "PHILADELPHIA", "TOKYO", "YOKOHAMA", "ROTTERDAM", "OSAKA", "KOBE", "FOS", "CARTAGENA"]
+        };
+
+        function cargarListasDesplegables() {
+            const llenarSelect = (id, items) => {
+                const sel = document.getElementById(id);
+                if(!sel) return;
+                sel.innerHTML = '<option value="">-- Seleccionar --</option>';
+                items.sort().forEach(item => {
+                    const opt = document.createElement('option');
+                    opt.value = item; opt.textContent = item;
+                    sel.appendChild(opt);
+                });
+            };
+            llenarSelect('cliente', DATA_LISTAS.clientes);
+            llenarSelect('paisDestino', DATA_LISTAS.paises);
+            llenarSelect('pol', DATA_LISTAS.puertosCarga);
+            llenarSelect('pod', DATA_LISTAS.puertosDescarga);
+            document.getElementById('bodyLotes').innerHTML = '';
+            agregarFila('bodyLotes');
+        }
+
+        const i18n = {
+            ES: { titulo: "PACKING LIST / DETALLE DE CARGA", ref: "Referencia", cliente: "Cliente", destino: "Destino", carga: "Puerto de carga", descarga: "Puerto de descarga", origen: "Aeropuerto de origen", destAereo: "Aeropuerto de destino", etd: "ETD (Salida)", eta: "ETA (Llegada)", cont: "Contenedor", buque: "Buque / Viaje", booking: "N° Booking", aero: "Aerolinea", vuelo: "Nro.Vuelo", awb: "Numero guia", chofer: "Chofer", patenteC: "Patente camion", patenteS: "Patente semi", empresa: "Transporte", hProd: "PRODUCTO", hLote: "LOTE", hTamb: "TAMBORES", hCant: "CANT", hNeto: "NETO (KG)", hBruto: "BRUTO (KG)", subtotal: "SUBTOTAL CARGA COMERCIAL", muestra: "MUESTRA", totalFinal: "PESO TOTAL FINAL", pallets: "PALLETS", obs: "OBSERVACIONES" },
+            EN: { titulo: "PACKING LIST / CARGO DETAILS", ref: "Reference", cliente: "Customer", destino: "Destination", carga: "Port of loading", descarga: "Port of discharge", origen: "Airport of departure", destAereo: "Airport of destination", etd: "ETD (departure)", eta: "ETA (arrival)", cont: "Container", buque: "Vessel / Voyage", booking: "Booking NO.", aero: "Airline", vuelo: "Flight NO.", awb: "AWB NO.", chofer: "Driver", patenteC: "Truck plate", patenteS: "Trailer plate", empresa: "Transport CO.", hProd: "PRODUCT", hLote: "BATCH/LOT", hTamb: "DRUMS", hCant: "QTY", hNeto: "NET (KG)", hBruto: "GROSS (KG)", subtotal: "COMMERCIAL CARGO SUBTOTAL", muestra: "SAMPLE", totalFinal: "FINAL TOTAL WEIGHT", pallets: "PALLETS", obs: "OBSERVATIONS" }
+        };
+
+        function verPestana(id) {
+            document.getElementById('pestana-generador').classList.toggle('hidden', id !== 'generador');
+            document.getElementById('pestana-historial').classList.toggle('hidden', id !== 'historial');
+            document.getElementById('btnNavGen').className = id === 'generador' ? "px-6 py-3 rounded-t-xl font-bold bg-white border-t-4 border-blue-900 shadow-sm" : "px-6 py-3 rounded-t-xl font-bold bg-slate-200 hover:bg-white transition shadow-sm";
+            document.getElementById('btnNavHist').className = id === 'historial' ? "px-6 py-3 rounded-t-xl font-bold bg-white border-t-4 border-blue-900 shadow-sm" : "px-6 py-3 rounded-t-xl font-bold bg-slate-200 hover:bg-white transition shadow-sm";
+            if(id === 'historial') renderizarHistorial();
+        }
+
+        function toggleTransporte() {
+            const via = document.getElementById('via').value;
+            const logFechas = document.getElementById('logisticaFechas');
+            const lPol = document.getElementById('labelPol');
+            const lPod = document.getElementById('labelPod');
+            logFechas.classList.toggle('hidden', via === 'TERRESTRE');
+            if(via === 'MARITIMO') { lPol.innerText = "Puerto de Carga"; lPod.innerText = "Puerto de Descarga"; }
+            else if(via === 'AEREO') { lPol.innerText = "Aeropuerto de Origen"; lPod.innerText = "Aeropuerto de Destino"; }
+            document.getElementById('camposMaritimo').classList.add('hidden');
+            document.getElementById('camposAereo').classList.add('hidden');
+            document.getElementById('camposTerrestre').classList.add('hidden');
+            if(via === 'MARITIMO') document.getElementById('camposMaritimo').classList.remove('hidden');
+            if(via === 'AEREO') document.getElementById('camposAereo').classList.remove('hidden');
+            if(via === 'TERRESTRE') document.getElementById('camposTerrestre').classList.remove('hidden');
+        }
+
+        function togglePallets() { document.getElementById('camposPallets').classList.toggle('hidden', document.getElementById('conPallets').value === 'NO'); }
+        function toggleTermo() { document.getElementById('camposTermo').classList.toggle('hidden', document.getElementById('conTermo').value === 'NO'); }
+        function toggleTambores() { document.querySelectorAll('.col-tambores').forEach(el => el.classList.toggle('hidden', !document.getElementById('mostrarTambores').checked)); }
+
+        function agregarFila(id) {
+            const tbody = document.getElementById(id);
+            const row = document.createElement('tr');
+            if(id === 'bodyLotes') {
+                const isTamboresVisible = document.getElementById('mostrarTambores').checked ? '' : 'hidden';
+                const ops = DATA_LISTAS.productos.sort().map(p => `<option value="${p}">${p}</option>`).join('');
+                row.className = 'item-row text-center';
+                row.innerHTML = `<td class="p-2 border-b"><select class="w-full p-2 border rounded font-bold bg-slate-50 focus:bg-white"><option value="">-- Producto --</option>${ops}</select></td><td class="p-2 border-b"><input type="text" class="w-full p-2 border rounded text-center"></td><td class="p-2 border-b bg-blue-50 col-tambores ${isTamboresVisible}"><input type="text" class="w-full p-2 border rounded text-center"></td><td class="p-2 border-b"><input type="number" class="w-full p-2 border rounded text-center"></td><td class="p-2 border-b"><input type="number" class="w-full p-2 border rounded text-center"></td><td class="p-2 border-b"><input type="number" class="w-full p-2 border rounded text-center"></td><td class="p-2 border-b text-red-500 cursor-pointer font-bold" onclick="eliminarFila(this, 'bodyLotes')">✕</td>`;
+            } else {
+                row.className = 'muestra-row text-center';
+                row.innerHTML = `<td class="p-2 border-b"><input type="text" class="w-full p-2 border rounded text-center"></td><td class="p-2 border-b"><input type="number" class="w-full p-2 border rounded text-center"></td><td class="p-2 border-b"><input type="number" class="w-full p-2 border rounded text-center"></td><td class="p-2 border-b"><input type="number" class="w-full p-2 border rounded text-center"></td><td class="p-2 border-b text-red-500 cursor-pointer font-bold" onclick="this.closest('tr').remove()">✕</td>`;
+            }
+            tbody.appendChild(row);
+        }
+
+        function eliminarFila(btn, id) { if (document.getElementById(id).querySelectorAll('tr').length > 1) btn.closest('tr').remove(); }
+
+        function limpiarFormulario() {
+            if(confirm("¿Borrar todos los datos?")) {
+                document.getElementById('plForm').reset();
+                document.getElementById('bodyLotes').innerHTML = '';
+                document.getElementById('bodyMuestras').innerHTML = '';
+                agregarFila('bodyLotes');
+                toggleTransporte(); togglePallets(); toggleTermo(); toggleTambores();
+                window.scrollTo({top: 0, behavior: 'smooth'});
+            }
+        }
+
+        async function validarYGuardarCloud() {
+            const refEca = document.getElementById('refEca').value.trim();
+            if(!refEca) { alert("Ingrese Ref ECA"); return; }
+            
+            // AGREGADO: Se vuelve a usar setDoc para validar existencia (tu lógica original)
+            const snap = await window.fb.get(window.fb.qry(window.fb.col(window.fb.db, "packinglists"), window.fb.wh("ref", "==", refEca)));
+            if(!snap.empty) {
+                if(!confirm("La referencia ya existe. ¿Desea SOBREESCRIBIRLA? (El registro anterior se borrará)")) return;
+                snap.forEach(async d => await window.fb.del(window.fb.docRef(window.fb.db, "packinglists", d.id)));
+            }
+            ejecutarGuardado();
+        }
+
+        async function ejecutarGuardado() {
+            const items = [];
+            document.querySelectorAll("#bodyLotes .item-row").forEach(f => {
+                const prod = f.querySelector("select").value;
+                const inps = f.querySelectorAll("input");
+                if(prod) items.push({ prod, lote: inps[0].value, tamb: inps[1].value, cant: Number(inps[2].value)||0, netoU: Number(inps[3].value)||0, brutoU: Number(inps[4].value)||0 });
+            });
+
+            const muestras = [];
+            document.querySelectorAll("#bodyMuestras .muestra-row").forEach(f => {
+                const i = f.querySelectorAll("input");
+                if(i[0].value) muestras.push({ lote: i[0].value, cant: Number(i[1].value)||0, netoU: Number(i[2].value)||0, brutoU: Number(i[3].value)||0 });
+            });
+
+            const data = {
+                createdAt: new Date(), fecha: new Date().toLocaleString(), 
+                ref: document.getElementById('refEca').value, cliente: document.getElementById('cliente').value, 
+                pais: document.getElementById('paisDestino').value, via: document.getElementById('via').value, 
+                pol: document.getElementById('pol').value, pod: document.getElementById('pod').value, 
+                etd: document.getElementById('etd').value, eta: document.getElementById('eta').value, 
+                contenedor: document.getElementById('contenedor').value, buque: document.getElementById('buque').value, 
+                booking: document.getElementById('booking').value, aerolinea: document.getElementById('aerolinea').value, 
+                vuelo: document.getElementById('vuelo').value, awb: document.getElementById('awb').value, 
+                chofer: document.getElementById('chofer').value, pCamion: document.getElementById('patenteCamion').value, 
+                pSemi: document.getElementById('patenteSemi').value, empresa: document.getElementById('empresa').value, 
+                items, muestras,
+                observaciones: document.getElementById('observaciones').value, // AGREGADO: CAPTURA DE OBS
+                inclTambores: document.getElementById('mostrarTambores').checked, 
+                pCant: Number(document.getElementById('cantPallets').value) || 0, pPesoU: Number(document.getElementById('pesoPallet').value) || 0,
+                conTermo: document.getElementById('conTermo').value, termo1: document.getElementById('termo1').value, termo2: document.getElementById('termo2').value
+            };
+
+            await window.fb.add(window.fb.col(window.fb.db, "packinglists"), data);
+            generarPDFCore(data, document.getElementById('idiomaDoc').value);
+            alert("Guardado con éxito");
+            renderizarHistorial(); 
+        }
+
+        async function renderizarHistorial() {
+            if(!window.fb) return;
+            const tbody = document.getElementById('tablaHistorial');
+            const snap = await window.fb.get(window.fb.qry(window.fb.col(window.fb.db, "packinglists"), window.fb.ord("createdAt", "desc")));
+            tbody.innerHTML = '';
+            snap.forEach(doc => {
+                const pl = doc.data();
+                const tr = document.createElement('tr');
+                tr.className = "border-b text-xs hover:bg-slate-50 transition";
+                tr.innerHTML = `<td class="py-4">${pl.fecha}</td><td class="font-bold text-blue-900">${pl.ref}</td><td>${pl.cliente}</td><td class="text-center space-x-2"><button onclick='cargarParaEditar("${doc.id}")' class="px-3 py-1 bg-amber-100 text-amber-800 rounded font-bold hover:bg-amber-200">✏️</button><button onclick='descargarDesdeCloud("${doc.id}", "ES")' class="px-2 py-1 bg-blue-100 text-blue-800 rounded font-bold hover:bg-blue-200">ES</button><button onclick='descargarDesdeCloud("${doc.id}", "EN")' class="px-2 py-1 bg-blue-100 text-blue-800 rounded font-bold hover:bg-blue-200">EN</button></td><td><button onclick="eliminarDeCloud('${doc.id}')" class="text-red-500 font-bold">✕</button></td>`;
+                tbody.appendChild(tr);
+            });
+        }
+
+        async function cargarParaEditar(id) {
+            const snap = await window.fb.get(window.fb.col(window.fb.db, "packinglists"));
+            let d = null; snap.forEach(doc => { if(doc.id === id) d = doc.data(); });
+            if(!d) return;
+            document.getElementById('refEca').value = d.ref;
+            document.getElementById('cliente').value = d.cliente;
+            document.getElementById('paisDestino').value = d.pais;
+            document.getElementById('via').value = d.via; toggleTransporte();
+            document.getElementById('pol').value = d.pol; document.getElementById('pod').value = d.pod;
+            document.getElementById('etd').value = d.etd; document.getElementById('eta').value = d.eta;
+            document.getElementById('contenedor').value = d.contenedor; document.getElementById('buque').value = d.buque; document.getElementById('booking').value = d.booking;
+            document.getElementById('aerolinea').value = d.aerolinea; document.getElementById('vuelo').value = d.vuelo; document.getElementById('awb').value = d.awb;
+            document.getElementById('chofer').value = d.chofer; document.getElementById('patenteCamion').value = d.pCamion; document.getElementById('patenteSemi').value = d.pSemi; document.getElementById('empresa').value = d.empresa;
+            document.getElementById('observaciones').value = d.observaciones || ""; // AGREGADO: CARGAR OBS
+            const bodyLotes = document.getElementById('bodyLotes'); bodyLotes.innerHTML = '';
+            document.getElementById('mostrarTambores').checked = d.inclTambores;
+            d.items.forEach(i => {
+                agregarFila('bodyLotes'); const row = bodyLotes.lastElementChild;
+                row.querySelector('select').value = i.prod; const inps = row.querySelectorAll('input');
+                inps[0].value = i.lote; inps[1].value = i.tamb; inps[2].value = i.cant; inps[3].value = i.netoU; inps[4].value = i.brutoU;
+            });
+            toggleTambores();
+            const bodyMues = document.getElementById('bodyMuestras'); bodyMues.innerHTML = '';
+            if(d.muestras) d.muestras.forEach(m => {
+                agregarFila('bodyMuestras'); const inps = bodyMues.lastElementChild.querySelectorAll('input');
+                inps[0].value = m.lote; inps[1].value = m.cant; inps[2].value = m.netoU; inps[3].value = m.brutoU;
+            });
+            document.getElementById('conPallets').value = d.pCant > 0 ? 'SI' : 'NO';
+            document.getElementById('cantPallets').value = d.pCant; document.getElementById('pesoPallet').value = d.pPesoU; togglePallets();
+            document.getElementById('conTermo').value = d.conTermo || 'NO';
+            document.getElementById('termo1').value = d.termo1; document.getElementById('termo2').value = d.termo2; toggleTermo();
+            verPestana('generador');
+        }
+
+        async function descargarDesdeCloud(id, lang) {
+            const snap = await window.fb.get(window.fb.col(window.fb.db, "packinglists"));
+            snap.forEach(doc => { if(doc.id === id) generarPDFCore(doc.data(), lang); });
+        }
+
+        async function eliminarDeCloud(id) { if(confirm("¿Eliminar?")) { await window.fb.del(window.fb.docRef(window.fb.db, "packinglists", id)); renderizarHistorial(); } }
+
+        async function generarPDFCore(data, lang) {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            const T = i18n[lang];
+
+            const cargarImagen = (url) => { return new Promise((resolve) => { const img = new Image(); img.crossOrigin = "Anonymous"; img.src = url; img.onload = () => resolve(img); img.onerror = () => resolve(null); }); };
+            const imgLogo = await cargarImagen(LOGO_URL);
+
+            doc.setTextColor(0, 51, 102); doc.setFontSize(22).setFont("helvetica", 'bold'); doc.text("ECA AGROINDUSTRIA", 14, 22);
+            doc.setFontSize(10).setFont("helvetica", 'normal'); doc.text(T.titulo, 14, 30);
+            if(imgLogo) doc.addImage(imgLogo, 'PNG', 150, 8, 45, 24); 
+
+            doc.setDrawColor(0, 51, 102).setLineWidth(1.2).line(14, 38, 196, 38);
+            doc.setTextColor(0, 0, 0);
+            const imprimirDato = (etiqueta, valor, x, y) => {
+                doc.setFontSize(7).setFont("helvetica", 'normal'); doc.text(etiqueta + ":", x, y);
+                const offset = doc.getTextWidth(etiqueta + ": ") + 1;
+                doc.setFontSize(9).setFont("helvetica", 'bold'); doc.text(String(valor || "N/A"), x + offset, y);
+            };
+
+            imprimirDato(T.ref, data.ref, 14, 48); imprimirDato(T.cliente, data.cliente, 14, 54); imprimirDato(T.destino, data.pais, 14, 60);
+            if(data.via !== 'TERRESTRE') { imprimirDato(data.via === 'MARITIMO' ? T.carga : T.origen, data.pol, 14, 66); imprimirDato(data.via === 'MARITIMO' ? T.descarga : T.destAereo, data.pod, 14, 72); }
+            if(data.via === 'MARITIMO') { imprimirDato(T.etd, data.etd, 110, 48); imprimirDato(T.eta, data.eta, 110, 54); imprimirDato(T.cont, data.contenedor, 110, 60); imprimirDato(T.buque, data.buque, 110, 66); imprimirDato(T.booking, data.booking, 110, 72); }
+            else if(data.via === 'AEREO') { imprimirDato(T.etd, data.etd, 110, 48); imprimirDato(T.eta, data.eta, 110, 54); imprimirDato(T.aero, data.aerolinea, 110, 60); imprimirDato(T.vuelo, data.vuelo, 110, 66); imprimirDato(T.awb, data.awb, 110, 72); }
+            else { imprimirDato(T.chofer, data.chofer, 110, 48); imprimirDato(T.patenteC, data.pCamion, 110, 54); imprimirDato(T.patenteS, data.pSemi, 110, 60); imprimirDato(T.empresa, data.empresa, 110, 66); }
+
+            const traduccionProductos = { "ACEITE ESCENCIAL DE LIMON": "LEMON ESSENTIAL OIL", "ACEITE ESCENCIAL DE MANDARINA": "MANDARIN ESSENTIAL OIL", "ACEITE ESCENCIAL DE NARANJA": "ORANGE ESSENTIAL OIL", "ACEITE ESCENCIAL DE POMELO": "GRAPEFRUIT ESSENTIAL OIL", "ACEITE ESCENCIAL DE MANDARINA ORGANICA": "ORGANIC MANDARIN ESSENTIAL OIL", "ACEITE ESCENCIAL DE POMELO ORGANICO": "ORGANIC GRAPEFRUIT OIL", "ACEITE ESCENCIAL DE NARANJA ORGANICA": "ORGANIC ORANGE OIL", "ACEITE ESCENCIAL DE LIMON ORGANICO": "ORGANIC LEMON OIL", "JUGO CONCENTRADO DE LIMON": "CONCENTRATED LEMON JUICE", "JUGO CONCENTRADO DE MANDARINA": "CONCENTRATED MANDARIN JUICE", "JUGO CONCENTRADO DE NARANJA": "CONCENTRATED ORANGE JUICE", "JUGO CONCENTRADO DE NARANJA CLOUDY": "CLOUDY CONCENTRATED ORANGE JUICE", "JUGO CONCENTRADO DE POMELO": "CONCENTRATED GRAPEFRUIT JUICE", "JUGO CONCENTRADO DE MANDARINA ORGANICA": "ORGANIC MANDARIN JUICE CONCENTRATE", "JUGO CONCENTRADO DE NARANJA ORGANICA": "ORGANIC ORANGE JUICE CONCENTRATE", "JUGO CONCENTRADO DE LIMON ORGANICO": "ORGANIC LEMON JUICE CONCENTRATE", "JUGO CONCENTRADO DE POMELO ORGANICO": "ORGANIC GRAPEFRUIT JUICE CONCENTRATE" };
+
+            let pdfBody = [], tNeto = 0, tBruto = 0, tCant = 0;
+            data.items.forEach(i => {
+                const n = i.cant * i.netoU, b = i.cant * i.brutoU; tCant += i.cant; tNeto += n; tBruto += b;
+                let nombreProducto = (lang === 'EN' && traduccionProductos[i.prod.toUpperCase()]) ? traduccionProductos[i.prod.toUpperCase()] : i.prod;
+                let r = [nombreProducto, i.lote]; if(data.inclTambores) r.push(i.tamb); r.push(i.cant, n.toFixed(2), b.toFixed(2)); pdfBody.push(r);
+            });
+
+            let colSpanLabel = data.inclTambores ? 3 : 2;
+            let netMues = 0, bruMues = 0;
+            if(data.muestras) data.muestras.forEach(m => {
+                const n = m.cant * m.netoU, b = m.cant * m.brutoU; netMues += n; bruMues += b;
+                let r = [T.muestra, m.lote]; if(data.inclTambores) r.push("-"); r.push(m.cant, n.toFixed(2), b.toFixed(2)); pdfBody.push(r);
+            });
+
+            const pPeso = (data.pCant || 0) * (data.pPesoU || 0);
+            if(pPeso > 0) pdfBody.push([{ content: `${T.pallets} (${data.pCant} x ${data.pPesoU}kg)`, colSpan: data.inclTambores ? 5 : 4, styles: { halign: 'right', fontStyle: 'italic' } }, { content: pPeso.toFixed(2), styles: { halign: 'center', fontStyle: 'italic' } }]);
+
+            let headers = [T.hProd, T.hLote]; if(data.inclTambores) headers.push(T.hTamb); headers.push(T.hCant, T.hNeto, T.hBruto);
+
+            doc.autoTable({
+                startY: 80, head: [headers], body: pdfBody,
+                foot: [[ { content: T.totalFinal, colSpan: colSpanLabel, styles: { halign: 'right' } }, { content: tCant.toString(), styles: { halign: 'center' } }, { content: (tNeto + netMues).toFixed(2), styles: { halign: 'center' } }, { content: (tBruto + bruMues + pPeso).toFixed(2), styles: { halign: 'center' } } ]],
+                theme: 'striped', headStyles: { fillColor: [0, 51, 102], fontSize: 8, halign: 'center', font: "helvetica" },
+                bodyStyles: { fontSize: 7.5, font: "helvetica" }, footStyles: { fillColor: [0, 51, 102], textColor: 255, fontStyle: 'bold', fontSize: 9 },
+            });
+
+            // AGREGADO: IMPRESIÓN DE OBSERVACIONES EN EL PDF
+            let currentY = doc.lastAutoTable.finalY + 10;
+            if (data.observaciones && data.observaciones.trim() !== "") {
+                doc.setFontSize(9).setFont("helvetica", 'bold');
+                doc.text(T.obs + ":", 14, currentY);
+                doc.setFontSize(8).setFont("helvetica", 'normal');
+                const splitObs = doc.splitTextToSize(data.observaciones, 180);
+                doc.text(splitObs, 14, currentY + 5);
+                currentY += (splitObs.length * 4) + 12;
+            }
+
+            // Firma y Pie igual
+            const finalY = currentY > 230 ? 240 : currentY + 5;
+            const cargarFirma = (url) => { return new Promise((resolve) => { const img = new Image(); img.crossOrigin = "Anonymous"; img.src = url; img.onload = () => resolve(img); img.onerror = () => resolve(null); }); };
+            const imgFirma = await cargarFirma("https://lh3.googleusercontent.com/d/1m-O260uMHL7YN1A-sqB1ooiztmaU6Gb4");
+            if (imgFirma) doc.addImage(imgFirma, 'PNG', 150, finalY, 18, 28); 
+            doc.setDrawColor(0, 0, 0).setLineWidth(0.5).line(135, finalY + 30, 185, finalY + 30); 
+            doc.setFont("helvetica", "bold").setFontSize(9).text("ECA AGROINDUSTRIA", 142, finalY + 35); 
+            doc.setFont("helvetica", "normal").setFontSize(8).text(lang === 'EN' ? "Authorized Signature" : "Firma Autorizada", 146, finalY + 39);
+
+            const totalPaginas = doc.internal.getNumberOfPages();
+            for (let i = 1; i <= totalPaginas; i++) {
+                doc.setPage(i); doc.setFontSize(7).setTextColor(100); doc.line(14, 280, 196, 280);
+                doc.text("ECA AGROINDUSTRIA - RUTA NACIONAL 14 KM.265 (3201) CONCORDIA - ENTRE RIOS - ARGENTINA", 14, 284);
+                doc.text(`${lang === 'EN' ? 'Page' : 'Página'} ${i} de ${totalPaginas}`, 196, 288, { align: 'right' });
+            }
+
+            // AGREGADO: NOMBRE DE ARCHIVO (REF + CONTENEDOR)
+            const cleanCont = data.contenedor ? data.contenedor.replace(/[^a-zA-Z0-9]/g, "") : "SCONT";
+            doc.save(`PL_${data.ref}_${cleanCont}_${lang}.pdf`);
+        }
+    </script>
+</body>
+</html>
