@@ -480,9 +480,13 @@
             document.getElementById('conPallets').value = d.pCant > 0 ? 'SI' : 'NO';
             document.getElementById('cantPallets').value = d.pCant; document.getElementById('pesoPallet').value = d.pPesoU;
             togglePallets();
+            
+            // --- CARGA DE TERMÓGRAFOS AL EDITAR ---
             document.getElementById('conTermo').value = d.conTermo || 'NO';
-            document.getElementById('termo1').value = d.termo1; document.getElementById('termo2').value = d.termo2;
+            document.getElementById('termo1').value = d.termo1 || ''; 
+            document.getElementById('termo2').value = d.termo2 || '';
             toggleTermo();
+            
             verPestana('generador');
         }
 
@@ -493,13 +497,11 @@
 
         async function eliminarDeCloud(id) { if(confirm("¿Eliminar?")) { await window.fb.del(window.fb.docRef(window.fb.db, "packinglists", id)); renderizarHistorial(); } }
 
-        // --- FUNCIÓN PDF CORREGIDA: LOGO COLOR (HEAD), B&N (WATERMARK) Y TABLA RECTA ---
         async function generarPDFCore(data, lang) {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
             const T = i18n[lang];
 
-            // 1. CARGA DE IMÁGENES (Color para cabecera, B&N para marca de agua)
             const cargarImagenBN = (url) => {
                 return new Promise((resolve) => {
                     const img = new Image();
@@ -510,11 +512,8 @@
                         const ctx = canvas.getContext('2d');
                         canvas.width = img.width;
                         canvas.height = img.height;
-                        
-                        // Versión B&N para la marca de agua
                         ctx.filter = 'grayscale(100%)';
                         ctx.drawImage(img, 0, 0);
-                        
                         resolve({
                             original: img,
                             bn: canvas.toDataURL('image/png')
@@ -537,7 +536,6 @@
             doc.text(T.titulo, 14, 30);
 
             if (imagenes && imagenes.original) {
-                // Logo a COLOR en el encabezado
                 doc.addImage(imagenes.original, 'PNG', 150, 8, 45, 24); 
             }
 
@@ -588,6 +586,17 @@
                 imprimirDato(T.empresa, data.empresa, 110, 66);
             }
 
+            // --- BLOQUE CORREGIDO: TERMÓGRAFOS EN PDF ---
+            if (data.conTermo === "SI") {
+                const txtTermo = lang === 'EN' ? "THERMOGRAPHS:" : "TERMÓGRAFOS:";
+                doc.setFontSize(7);
+                doc.setFont("helvetica", 'normal');
+                doc.text(txtTermo, 14, 78);
+                doc.setFontSize(9);
+                doc.setFont("helvetica", 'bold');
+                doc.text(`${data.termo1 || ''} ${data.termo2 ? ' / ' + data.termo2 : ''}`, 40, 78);
+            }
+
             // 5. TABLA DE PRODUCTOS
             const traduccionProductos = {
                 "ACEITE ESCENCIAL DE LIMON": "LEMON ESSENTIAL OIL", 
@@ -623,16 +632,18 @@
                 pdfBody.push(r);
             });
 
-            let colSpanLabel = data.inclTambores ? 3 : 2;
+            // --- INTEGRACIÓN DE MUESTRAS EN LA TABLA ---
             let netMues = 0, bruMues = 0;
-            if(data.muestras) data.muestras.forEach(m => {
-                const n = m.cant * m.netoU, b = m.cant * m.brutoU;
-                netMues += n; bruMues += b;
-                let r = [T.muestra, m.lote];
-                if(data.inclTambores) r.push("-");
-                r.push(m.cant, n.toFixed(2), b.toFixed(2));
-                pdfBody.push(r);
-            });
+            if(data.muestras && data.muestras.length > 0) {
+                data.muestras.forEach(m => {
+                    const n = m.cant * m.netoU, b = m.cant * m.brutoU;
+                    netMues += n; bruMues += b;
+                    let r = [lang === 'EN' ? "SAMPLE (No Commercial Value)" : "MUESTRA (Sin Valor Comercial)", m.lote];
+                    if(data.inclTambores) r.push("-");
+                    r.push(m.cant, n.toFixed(2), b.toFixed(2));
+                    pdfBody.push(r);
+                });
+            }
 
             const pPeso = (data.pCant || 0) * (data.pPesoU || 0);
             if(pPeso > 0) pdfBody.push([{ content: `${T.pallets} (${data.pCant} x ${data.pPesoU}kg)`, colSpan: data.inclTambores ? 5 : 4, styles: { halign: 'right', fontStyle: 'italic' } }, { content: pPeso.toFixed(2), styles: { halign: 'center', fontStyle: 'italic' } }]);
@@ -641,6 +652,7 @@
             if(data.inclTambores) headers.push(T.hTamb);
             headers.push(T.hCant, T.hNeto, T.hBruto);
 
+            let colSpanLabel = data.inclTambores ? 3 : 2;
             const estilosColumnas = { 0: { cellWidth: 'auto' }, 1: { cellWidth: 25, halign: 'center' } };
             let idx = 2;
             if(data.inclTambores) { estilosColumnas[2] = { cellWidth: 22, halign: 'center' }; idx = 3; }
@@ -649,7 +661,7 @@
             estilosColumnas[idx + 2] = { cellWidth: 25, halign: 'center' };
 
             doc.autoTable({
-                startY: 80, 
+                startY: 82, 
                 head: [headers], 
                 body: pdfBody,
                 foot: [[
@@ -659,50 +671,33 @@
                     { content: (tBruto + bruMues + pPeso).toFixed(2), styles: { halign: 'center' } }
                 ]],
                 theme: 'striped', 
-                headStyles: { 
-                    fillColor: [0, 51, 102], 
-                    fontSize: 8, 
-                    halign: 'center', 
-                    valign: 'middle', 
-                    minCellHeight: 10, 
-                    font: "helvetica",
-                    cellPadding: 3
-                },
+                headStyles: { fillColor: [0, 51, 102], fontSize: 8, halign: 'center', valign: 'middle', minCellHeight: 10, font: "helvetica", cellPadding: 3 },
                 bodyStyles: { fontSize: 7.5, font: "helvetica" },
                 footStyles: { fillColor: [0, 51, 102], textColor: 255, fontStyle: 'bold', fontSize: 9 },
                 columnStyles: estilosColumnas 
             });
 
-            // --- MARCA DE AGUA DINÁMICA (B&N) ---
             const postTableY = doc.lastAutoTable.finalY;
 
-	// --- OBSERVACIONES ---
-	if (data.observaciones && data.observaciones.trim() !== "") {
+            // --- OBSERVACIONES ---
+            if (data.observaciones && data.observaciones.trim() !== "") {
+                const margenInferior = 275;
+                const lineHeight = 4;
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(8);
+                const obsTexto = doc.splitTextToSize(data.observaciones, 180);
+                const altoTexto = obsTexto.length * lineHeight;
+                const obsY = margenInferior - altoTexto - 30; // Ajustado para no chocar con firma
 
-    	const margenInferior = 275; // límite superior del footer
-    	const lineHeight = 4; // altura aproximada por línea
-
-    	doc.setFont("helvetica", "normal");
-    	doc.setFontSize(8);
-
-    	const obsTexto = doc.splitTextToSize(data.observaciones, 180);
-    	const altoTexto = obsTexto.length * lineHeight;
-
-    	// Calcula posición para que crezca hacia arriba
-    	const obsY = margenInferior - altoTexto - 6;
-
-    	// Título
-    	doc.setFont("helvetica", "bold");
-    	doc.setFontSize(9);
-    	doc.setTextColor(0, 51, 102);
-    	doc.text(lang === 'EN' ? "Observations:" : "Observaciones:", 14, obsY);
-
-    	// Texto
-    	doc.setFont("helvetica", "normal");
-    	doc.setFontSize(8);
-    	doc.setTextColor(0, 0, 0);
-    	doc.text(obsTexto, 14, obsY + 5);
-	}
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(9);
+                doc.setTextColor(0, 51, 102);
+                doc.text(lang === 'EN' ? "Observations:" : "Observaciones:", 14, obsY);
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(8);
+                doc.setTextColor(0, 0, 0);
+                doc.text(obsTexto, 14, obsY + 5);
+            }
 
             if (imagenes && imagenes.bn) {
                 doc.saveGraphicsState();
@@ -713,23 +708,6 @@
 
             // 6. FIRMA
             const finalY = postTableY + 25; 
-            const cargarFirmaImg = (url) => {
-                return new Promise((resolve) => {
-                    const img = new Image();
-                    img.crossOrigin = "Anonymous";
-                    img.src = url;
-                    img.onload = () => resolve(img);
-                    img.onerror = () => resolve(null);
-                });
-            };
-
-            const firmaURL = "https://lh3.googleusercontent.com/d/1m-O260uMHL7YN1A-sqB1ooiztmaU6Gb4";
-            const imgFirma = await cargarFirmaImg(firmaURL);
-            
-            if (imgFirma) {
-                doc.addImage(imgFirma, 'PNG', 150, finalY + 5, 18, 28); 
-            }
-
             doc.setDrawColor(0, 0, 0);
             doc.setLineWidth(0.5);
             doc.line(135, finalY + 35, 185, finalY + 35); 
@@ -749,18 +727,14 @@
                 doc.setTextColor(100);
                 doc.setDrawColor(200, 200, 200);
                 doc.line(14, 280, 196, 280);
-
                 const linea1 = "ECA AGROINDUSTRIA - RUTA NACIONAL 14 KM.265 (3201) CONCORDIA - ENTRE RIOS - ARGENTINA";
                 doc.text(linea1, 14, 284);
-
                 const linea2 = "www.ecaagroindustria.com | info@ecaagroindustria.com | operaciones@ecaagroindustria.com";
                 doc.text(linea2, 14, 288);
-
                 const pieDerecha = lang === 'EN' ? `Page ${i} of ${totalPaginas}` : `Página ${i} de ${totalPaginas}`;
                 doc.text(pieDerecha, 196, 288, { align: 'right' });
             }
 
-            // 8. GUARDAR CON NOMBRE DINÁMICO (REF + CONTENEDOR)
             const nombreArchivo = `PL_${data.ref}_${data.contenedor || 'SIN_CONT'}_${lang}.pdf`;
             doc.save(nombreArchivo);
         }
