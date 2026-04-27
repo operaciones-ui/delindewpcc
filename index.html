@@ -357,7 +357,7 @@
                 });
             });
 
-            // --- BLOQUE AÑADIDO: CAPTURA DE MUESTRAS ---
+            // Captura de Muestras
             const muestras = [];
             document.querySelectorAll("#bodyMuestras .muestra-row").forEach(f => {
                 const inps = f.querySelectorAll("input");
@@ -388,20 +388,25 @@
                 buque: document.getElementById('buque').value, 
                 booking: document.getElementById('booking').value, 
                 
-                // --- CORRECCIÓN: IDS DE TRANSPORTE TERRESTRE ---
+                // IDs de transporte terrestre corregidos
                 chofer: document.getElementById('chofer').value,
                 pCamion: document.getElementById('patenteCamion').value,
                 pSemi: document.getElementById('patenteSemi').value,
                 empresa: document.getElementById('empresa').value,
                 
-                // --- CORRECCIÓN: IDS DE TRANSPORTE AÉREO ---
+                // IDs de transporte aéreo
                 aerolinea: document.getElementById('aerolinea').value,
                 vuelo: document.getElementById('vuelo').value,
                 awb: document.getElementById('awb').value,
 
+                // --- BLOQUE AÑADIDO: TERMÓGRAFOS ---
+                conTermo: document.getElementById('conTermo').value,
+                termo1: document.getElementById('termo1').value,
+                termo2: document.getElementById('termo2').value,
+
                 observaciones: document.getElementById('observaciones').value,
                 items, 
-                muestras, // <--- AHORA SE INCLUYEN EN EL OBJETO DATA
+                muestras,
                 inclTambores: document.getElementById('mostrarTambores').checked, 
                 pCant: Number(document.getElementById('cantPallets').value) || 0, 
                 pPesoU: Number(document.getElementById('pesoPallet').value) || 0
