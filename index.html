@@ -498,151 +498,260 @@
         async function eliminarDeCloud(id) { if(confirm("¿Eliminar?")) { await window.fb.del(window.fb.docRef(window.fb.db, "packinglists", id)); renderizarHistorial(); } }
 
         async function generarPDFCore(data, lang) {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF();
-            const T = i18n[lang];
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const T = i18n[lang];
 
-            const cargarImagenBN = (url) => {
-                return new Promise((resolve) => {
-                    const img = new Image();
-                    img.crossOrigin = "Anonymous";
-                    img.src = url;
-                    img.onload = () => {
-                        const canvas = document.createElement('canvas');
-                        const ctx = canvas.getContext('2d');
-                        canvas.width = img.width;
-                        canvas.height = img.height;
-                        ctx.filter = 'grayscale(100%)';
-                        ctx.drawImage(img, 0, 0);
-                        resolve({
-                            original: img,
-                            bn: canvas.toDataURL('image/png')
-                        });
-                    };
-                    img.onerror = () => resolve(null);
+    // 1. FUNCIÓN PARA CARGAR IMÁGENES (Logo y Marca de Agua)
+    const cargarImagenBN = (url) => {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = "Anonymous";
+            img.src = url;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.filter = 'grayscale(100%)';
+                ctx.drawImage(img, 0, 0);
+                resolve({
+                    original: img,
+                    bn: canvas.toDataURL('image/png')
                 });
             };
+            img.onerror = () => resolve(null);
+        });
+    };
 
-            const imagenes = await cargarImagenBN(LOGO_URL);
+    const imagenes = await cargarImagenBN(LOGO_URL);
 
-            // 2. ENCABEZADO
-            doc.setTextColor(0, 51, 102); 
-            doc.setFontSize(22);
-            doc.setFont("helvetica", 'bold'); 
-            doc.text("ECA AGROINDUSTRIA", 14, 22);
-            
-            doc.setFontSize(10);
-            doc.setFont("helvetica", 'normal');
-            doc.text(T.titulo, 14, 30);
+    // 2. ENCABEZADO
+    doc.setTextColor(0, 51, 102); 
+    doc.setFontSize(22);
+    doc.setFont("helvetica", 'bold'); 
+    doc.text("ECA AGROINDUSTRIA", 14, 22);
+    
+    doc.setFontSize(10);
+    doc.setFont("helvetica", 'normal');
+    doc.text(T.titulo, 14, 30);
 
-            if (imagenes && imagenes.original) {
-                doc.addImage(imagenes.original, 'PNG', 150, 8, 45, 24); 
-            }
+    if (imagenes && imagenes.original) {
+        doc.addImage(imagenes.original, 'PNG', 150, 8, 45, 24); 
+    }
 
-            // 3. FRANJA DIVISORIA
-            doc.setDrawColor(0, 51, 102);
-            doc.setLineWidth(1.2);
-            doc.line(14, 38, 196, 38);
+    // 3. FRANJA DIVISORIA
+    doc.setDrawColor(0, 51, 102);
+    doc.setLineWidth(1.2);
+    doc.line(14, 38, 196, 38);
 
-            // 4. DATOS DEL EMBARQUE
-            doc.setTextColor(0, 0, 0);
-            const imprimirDato = (etiqueta, valor, x, y) => {
-                doc.setFontSize(7);
-                doc.setFont("helvetica", 'normal');
-                doc.text(etiqueta + ":", x, y);
-                const offset = doc.getTextWidth(etiqueta + ": ") + 1;
-                doc.setFontSize(9);
-                doc.setFont("helvetica", 'bold');
-                doc.text(valor || "N/A", x + offset, y);
-            };
+    // 4. DATOS DEL EMBARQUE
+    doc.setTextColor(0, 0, 0);
+    const imprimirDato = (etiqueta, valor, x, y) => {
+        doc.setFontSize(7);
+        doc.setFont("helvetica", 'normal');
+        doc.text(etiqueta + ":", x, y);
+        const offset = doc.getTextWidth(etiqueta + ": ") + 1;
+        doc.setFontSize(9);
+        doc.setFont("helvetica", 'bold');
+        doc.text(valor || "N/A", x + offset, y);
+    };
 
-            imprimirDato(T.ref, data.ref, 14, 48);
-            imprimirDato(T.cliente, data.cliente, 14, 54);
-            imprimirDato(T.destino, data.pais, 14, 60);
-            
-            if(data.via !== 'TERRESTRE') {
-                const lPol = data.via === 'MARITIMO' ? T.carga : T.origen;
-                const lPod = data.via === 'MARITIMO' ? T.descarga : T.destAereo;
-                imprimirDato(lPol, data.pol, 14, 66);
-                imprimirDato(lPod, data.pod, 14, 72);
-            }
+    // Bloque Izquierdo
+    imprimirDato(T.ref, data.ref, 14, 48);
+    imprimirDato(T.cliente, data.cliente, 14, 54);
+    imprimirDato(T.destino, data.pais, 14, 60);
+    
+    if(data.via !== 'TERRESTRE') {
+        const lPol = data.via === 'MARITIMO' ? T.carga : T.origen;
+        const lPod = data.via === 'MARITIMO' ? T.descarga : T.destAereo;
+        imprimirDato(lPol, data.pol, 14, 66);
+        imprimirDato(lPod, data.pod, 14, 72);
+    }
 
-            if(data.via === 'MARITIMO') {
-                imprimirDato(T.etd, data.etd, 110, 48);
-                imprimirDato(T.eta, data.eta, 110, 54);
-                imprimirDato(T.cont, data.contenedor, 110, 60);
-                imprimirDato(T.buque, data.buque, 110, 66);
-                imprimirDato(T.booking, data.booking, 110, 72);
-            } else if(data.via === 'AEREO') {
-                imprimirDato(T.etd, data.etd, 110, 48);
-                imprimirDato(T.eta, data.eta, 110, 54);
-                imprimirDato(T.aero, data.aerolinea, 110, 60);
-                imprimirDato(T.vuelo, data.vuelo, 110, 66);
-                imprimirDato(T.awb, data.awb, 110, 72);
-            } else {
-                imprimirDato(T.chofer, data.chofer, 110, 48);
-                imprimirDato(T.patenteC, data.pCamion, 110, 54);
-                imprimirDato(T.patenteS, data.pSemi, 110, 60);
-                imprimirDato(T.empresa, data.empresa, 110, 66);
-            }
+    // Bloque Derecho
+    if(data.via === 'MARITIMO') {
+        imprimirDato(T.etd, data.etd, 110, 48);
+        imprimirDato(T.eta, data.eta, 110, 54);
+        imprimirDato(T.cont, data.contenedor, 110, 60);
+        imprimirDato(T.buque, data.buque, 110, 66);
+        imprimirDato(T.booking, data.booking, 110, 72);
+    } else if(data.via === 'AEREO') {
+        imprimirDato(T.etd, data.etd, 110, 48);
+        imprimirDato(T.eta, data.eta, 110, 54);
+        imprimirDato(T.aero, data.aerolinea, 110, 60);
+        imprimirDato(T.vuelo, data.vuelo, 110, 66);
+        imprimirDato(T.awb, data.awb, 110, 72);
+    } else {
+        imprimirDato(T.chofer, data.chofer, 110, 48);
+        imprimirDato(T.patenteC, data.pCamion, 110, 54);
+        imprimirDato(T.patenteS, data.pSemi, 110, 60);
+        imprimirDato(T.empresa, data.empresa, 110, 66);
+    }
 
-            // --- BLOQUE CORREGIDO: TERMÓGRAFOS EN PDF ---
-            if (data.conTermo === "SI") {
-                const txtTermo = lang === 'EN' ? "THERMOGRAPHS:" : "TERMÓGRAFOS:";
-                doc.setFontSize(7);
-                doc.setFont("helvetica", 'normal');
-                doc.text(txtTermo, 14, 78);
-                doc.setFontSize(9);
-                doc.setFont("helvetica", 'bold');
-                doc.text(`${data.termo1 || ''} ${data.termo2 ? ' / ' + data.termo2 : ''}`, 40, 78);
-            }
+    // TERMÓGRAFOS
+    if (data.conTermo === "SI") {
+        const txtTermo = lang === 'EN' ? "THERMOGRAPHS:" : "TERMÓGRAFOS:";
+        doc.setFontSize(7);
+        doc.setFont("helvetica", 'normal');
+        doc.text(txtTermo, 14, 78);
+        doc.setFontSize(9);
+        doc.setFont("helvetica", 'bold');
+        doc.text(`${data.termo1 || ''} ${data.termo2 ? ' / ' + data.termo2 : ''}`, 40, 78);
+    }
 
-            // 5. TABLA DE PRODUCTOS
-            const traduccionProductos = {
-                "ACEITE ESCENCIAL DE LIMON": "LEMON ESSENTIAL OIL", 
-                "ACEITE ESCENCIAL DE MANDARINA": "MANDARIN ESSENTIAL OIL", 
-                "ACEITE ESCENCIAL DE NARANJA": "ORANGE ESSENTIAL OIL", 
-                "ACEITE ESCENCIAL DE POMELO": "GRAPEFRUIT ESSENTIAL OIL", 
-                "ACEITE ESCENCIAL DE MANDARINA ORGANICA": "ORGANIC MANDARIN ESSENTIAL OIL", 
-                "ACEITE ESCENCIAL DE POMELO ORGANICO": "ORGANIC GRAPEFRUIT OIL", 
-                "ACEITE ESCENCIAL DE NARANJA ORGANICA": "ORGANIC ORANGE OIL", 
-                "ACEITE ESCENCIAL DE LIMON ORGANICO": "ORGANIC LEMON OIL", 
-                "JUGO CONCENTRADO DE LIMON": "CONCENTRATED LEMON JUICE", 
-                "JUGO CONCENTRADO DE MANDARINA": "CONCENTRATED MANDARIN JUICE", 
-                "JUGO CONCENTRADO DE NARANJA": "CONCENTRATED ORANGE JUICE", 
-                "JUGO CONCENTRADO DE NARANJA CLOUDY": "CLOUDY CONCENTRATED ORANGE JUICE",
-                "JUGO CONCENTRADO DE POMELO": "CONCENTRATED GRAPEFRUIT JUICE", 
-                "JUGO CONCENTRADO DE MANDARINA ORGANICA": "ORGANIC MANDARIN JUICE CONCENTRATE", 
-                "JUGO CONCENTRADO DE NARANJA ORGANICA": "ORGANIC ORANGE JUICE CONCENTRATE", 
-                "JUGO CONCENTRADO DE LIMON ORGANICO": "ORGANIC LEMON JUICE CONCENTRATE", 
-                "JUGO CONCENTRADO DE POMELO ORGANICO": "ORGANIC GRAPEFRUIT JUICE CONCENTRATE"
-            };
+    // 5. TABLA DE PRODUCTOS Y TRADUCCIONES
+    const traduccionProductos = {
+        "ACEITE ESCENCIAL DE LIMON": "LEMON ESSENTIAL OIL", 
+        "ACEITE ESCENCIAL DE MANDARINA": "MANDARIN ESSENTIAL OIL", 
+        "ACEITE ESCENCIAL DE NARANJA": "ORANGE ESSENTIAL OIL", 
+        "ACEITE ESCENCIAL DE POMELO": "GRAPEFRUIT ESSENTIAL OIL", 
+        "ACEITE ESCENCIAL DE MANDARINA ORGANICA": "ORGANIC MANDARIN ESSENTIAL OIL", 
+        "ACEITE ESCENCIAL DE POMELO ORGANICO": "ORGANIC GRAPEFRUIT OIL", 
+        "ACEITE ESCENCIAL DE NARANJA ORGANICA": "ORGANIC ORANGE OIL", 
+        "ACEITE ESCENCIAL DE LIMON ORGANICO": "ORGANIC LEMON OIL", 
+        "JUGO CONCENTRADO DE LIMON": "CONCENTRATED LEMON JUICE", 
+        "JUGO CONCENTRADO DE MANDARINA": "CONCENTRATED MANDARIN JUICE", 
+        "JUGO CONCENTRADO DE NARANJA": "CONCENTRATED ORANGE JUICE", 
+        "JUGO CONCENTRADO DE NARANJA CLOUDY": "CLOUDY CONCENTRATED ORANGE JUICE",
+        "JUGO CONCENTRADO DE POMELO": "CONCENTRATED GRAPEFRUIT JUICE", 
+        "JUGO CONCENTRADO DE MANDARINA ORGANICA": "ORGANIC MANDARIN JUICE CONCENTRATE", 
+        "JUGO CONCENTRADO DE NARANJA ORGANICA": "ORGANIC ORANGE JUICE CONCENTRATE", 
+        "JUGO CONCENTRADO DE LIMON ORGANICO": "ORGANIC LEMON JUICE CONCENTRATE", 
+        "JUGO CONCENTRADO DE POMELO ORGANICO": "ORGANIC GRAPEFRUIT JUICE CONCENTRATE"
+    };
 
-            let pdfBody = [], tNeto = 0, tBruto = 0, tCant = 0;
-            data.items.forEach(i => {
-                const n = i.cant * i.netoU, b = i.cant * i.brutoU;
-                tCant += i.cant; tNeto += n; tBruto += b;
-                let nombreProducto = i.prod;
-                if(lang === 'EN' && traduccionProductos[i.prod.toUpperCase()]) {
-                    nombreProducto = traduccionProductos[i.prod.toUpperCase()];
-                }
-                let r = [nombreProducto, i.lote];
-                if(data.inclTambores) r.push(i.tamb);
-                r.push(i.cant, n.toFixed(2), b.toFixed(2));
-                pdfBody.push(r);
-            });
+    let pdfBody = [], tNeto = 0, tBruto = 0, tCant = 0;
+    
+    // Items principales
+    data.items.forEach(i => {
+        const n = i.cant * i.netoU, b = i.cant * i.brutoU;
+        tCant += i.cant; tNeto += n; tBruto += b;
+        let nombreProducto = i.prod;
+        if(lang === 'EN' && traduccionProductos[i.prod.toUpperCase()]) {
+            nombreProducto = traduccionProductos[i.prod.toUpperCase()];
+        }
+        let r = [nombreProducto, i.lote];
+        if(data.inclTambores) r.push(i.tamb);
+        r.push(i.cant, n.toFixed(2), b.toFixed(2));
+        pdfBody.push(r);
+    });
 
-            // --- INTEGRACIÓN DE MUESTRAS EN LA TABLA ---
-            let netMues = 0, bruMues = 0;
-            if(data.muestras && data.muestras.length > 0) {
-                data.muestras.forEach(m => {
-                    const n = m.cant * m.netoU, b = m.cant * m.brutoU;
-                    netMues += n; bruMues += b;
-                    let r = [lang === 'EN' ? "SAMPLE (No Commercial Value)" : "MUESTRA (Sin Valor Comercial)", m.lote];
-                    if(data.inclTambores) r.push("-");
-                    r.push(m.cant, n.toFixed(2), b.toFixed(2));
-                    pdfBody.push(r);
-                });
+    // Muestras
+    let netMues = 0, bruMues = 0;
+    if(data.muestras && data.muestras.length > 0) {
+        data.muestras.forEach(m => {
+            const n = m.cant * m.netoU, b = m.cant * m.brutoU;
+            netMues += n; bruMues += b;
+            let r = [lang === 'EN' ? "SAMPLE (No Commercial Value)" : "MUESTRA (Sin Valor Comercial)", m.lote];
+            if(data.inclTambores) r.push("-");
+            r.push(m.cant, n.toFixed(2), b.toFixed(2));
+            pdfBody.push(r);
+        });
+    }
+
+    // Pallets
+    const pPeso = (data.pCant || 0) * (data.pPesoU || 0);
+    if(pPeso > 0) {
+        pdfBody.push([{ 
+            content: `${T.pallets} (${data.pCant} x ${data.pPesoU}kg)`, 
+            colSpan: data.inclTambores ? 5 : 4, 
+            styles: { halign: 'right', fontStyle: 'italic' } 
+        }, { 
+            content: pPeso.toFixed(2), 
+            styles: { halign: 'center', fontStyle: 'italic' } 
+        }]);
+    }
+
+    let headers = [T.hProd, T.hLote];
+    if(data.inclTambores) headers.push(T.hTamb);
+    headers.push(T.hCant, T.hNeto, T.hBruto);
+
+    // Renderizar Tabla
+    doc.autoTable({
+        startY: 82, 
+        head: [headers], 
+        body: pdfBody,
+        foot: [[
+            { content: T.totalFinal, colSpan: data.inclTambores ? 3 : 2, styles: { halign: 'right' } }, 
+            { content: tCant.toString(), styles: { halign: 'center' } }, 
+            { content: (tNeto + netMues).toFixed(2), styles: { halign: 'center' } }, 
+            { content: (tBruto + bruMues + pPeso).toFixed(2), styles: { halign: 'center' } }
+        ]],
+        theme: 'striped', 
+        headStyles: { fillColor: [0, 51, 102], fontSize: 8, halign: 'center', valign: 'middle' },
+        footStyles: { fillColor: [0, 51, 102], textColor: 255, fontStyle: 'bold', fontSize: 9 },
+        bodyStyles: { fontSize: 7.5 }
+    });
+
+    // --- MANEJO DE ESPACIO POST-TABLA ---
+    let currentY = doc.lastAutoTable.finalY;
+
+    // 1. MARCA DE AGUA (Logo tenue)
+    if (imagenes && imagenes.bn) {
+        doc.saveGraphicsState();
+        doc.setGState(new doc.GState({ opacity: 0.15 })); 
+        doc.addImage(imagenes.bn, 'PNG', 45, currentY + 5, 120, 65); 
+        doc.restoreGraphicsState();
+    }
+
+    // 2. OBSERVACIONES
+    if (data.observaciones && data.observaciones.trim() !== "") {
+        if (currentY > 230) { doc.addPage(); currentY = 20; }
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+        doc.setTextColor(0, 51, 102);
+        doc.text(lang === 'EN' ? "Observations:" : "Observaciones:", 14, currentY + 15);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(0, 0, 0);
+        const obsTexto = doc.splitTextToSize(data.observaciones, 180);
+        doc.text(obsTexto, 14, currentY + 20);
+        currentY += (obsTexto.length * 4) + 10;
+    }
+
+    // 3. FIRMA (REPARADA)
+    // Si después de observaciones no queda espacio para la firma, saltar página
+    if (currentY > 230) { 
+        doc.addPage(); 
+        currentY = 20; 
+    }
+
+    const finalY = currentY + 20;
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.5);
+    doc.line(135, finalY + 15, 185, finalY + 15); // Línea
+    
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(0, 0, 0);
+    doc.text("ECA AGROINDUSTRIA", 142, finalY + 20); 
+    
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.text(lang === 'EN' ? "Authorized Signature" : "Firma Autorizada", 146, finalY + 24);
+
+    // 4. PIE DE PÁGINA (Para todas las hojas)
+    const totalPaginas = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= totalPaginas; i++) {
+        doc.setPage(i);
+        doc.setFontSize(7);
+        doc.setTextColor(100);
+        doc.setDrawColor(200, 200, 200);
+        doc.line(14, 280, 196, 280);
+        
+        const linea1 = "ECA AGROINDUSTRIA - RUTA NACIONAL 14 KM.265 (3201) CONCORDIA - ENTRE RIOS - ARGENTINA";
+        doc.text(linea1, 14, 284);
+        
+        const linea2 = "www.ecaagroindustria.com | info@ecaagroindustria.com | operaciones@ecaagroindustria.com";
+        doc.text(linea2, 14, 288);
+        
+        const pieDerecha = lang === 'EN' ? `Page ${i} of ${totalPaginas}` : `Página ${i} de ${totalPaginas}`;
+        doc.text(pieDerecha, 196, 288, { align: 'right' });
+    }
+
+    doc.save(`PL_${data.ref}_${lang}.pdf`);
+}
             }
 
             const pPeso = (data.pCant || 0) * (data.pPesoU || 0);
