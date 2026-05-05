@@ -809,7 +809,7 @@
             if (imagenes && imagenes.bn) {
                 doc.saveGraphicsState();
                 doc.setGState(new doc.GState({ opacity: 0.20 })); 
-                doc.addImage(imagenes.bn, 'JPEG', 45, postTableY + 10, 120, 65, undefined, 'FAST'); 
+                doc.addImage(imagenes.bn, 'JPEG', 45, postTableY + 10, 120, 0, undefined, 'FAST'); 
                 doc.restoreGraphicsState();
             }
 
